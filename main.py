@@ -161,6 +161,18 @@ def add_kw():
         cfg.config['keywords'].append(kw); cfg.save()
     return redirect(url_for('index'))
 
+# 키워드 삭제 기능 추가
+@app.route('/del_kw/<type>/<int:idx>')
+def del_kw(type, idx):
+    try:
+        target = 'keywords' if type == 'in' else 'exclude_keywords'
+        if 0 <= idx < len(cfg.config.get(target, [])):
+            cfg.config[target].pop(idx)
+            cfg.save()
+    except Exception as e:
+        print(f"Delete Error: {e}")
+    return redirect(url_for('index'))
+
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
     port = int(os.environ.get("PORT", 5001))
