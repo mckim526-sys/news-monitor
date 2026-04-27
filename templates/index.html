@@ -54,7 +54,34 @@
         .radio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 10px; }
 
         .q-link { background: #334155; color: #cbd5e1; text-decoration: none; font-size: 10px; padding: 6px; border-radius: 4px; text-align: center; border: 1px solid #475569; }
-
+<style>
+    /* 기사 리스트 영역 스크롤 설정 */
+    .card-content {
+        height: 450px; /* 높이 고정 */
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+    /* 매체명 태그 너비 유지 */
+    .media-tag {
+        display: inline-block;
+        width: 75px;
+        font-weight: bold;
+        color: #2ecc71;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+    }
+    /* 우측 상단 개수 표시 배지 */
+    .count-badge {
+        float: right;
+        background: #34495e;
+        color: #3498db;
+        padding: 0px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+    }
+</style>
 
 
         @media (max-width: 1200px) {
