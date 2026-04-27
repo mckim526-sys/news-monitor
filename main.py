@@ -161,17 +161,20 @@ def add_kw():
         cfg.config['keywords'].append(kw); cfg.save()
     return redirect(url_for('index'))
 
-# 키워드 삭제 기능 추가
-@app.route('/del_kw/<type>/<int:idx>')
-def del_kw(type, idx):
+@app.route('/delete/<type>/<int:idx>')
+def delete_keyword(type, idx):
     try:
+        # type이 'in'이면 포함 키워드, 'out'이면 제외 키워드 처리
         target = 'keywords' if type == 'in' else 'exclude_keywords'
-        if 0 <= idx < len(cfg.config.get(target, [])):
-            cfg.config[target].pop(idx)
-            cfg.save()
+        
+        if target in cfg.config and 0 <= idx < len(cfg.config[target]):
+            deleted_val = cfg.config[target].pop(idx) # 해당 순서의 키워드 삭제
+            cfg.save() # 변경사항을 config.json에 저장
+            print(f"✅ 삭제 완료: {deleted_val}")
     except Exception as e:
-        print(f"Delete Error: {e}")
-    return redirect(url_for('index'))
+        print(f"❌ 삭제 중 오류 발생: {e}")
+        
+    return redirect(url_for('index')) # 삭제 후 다시 메인 화면으로 이동
 
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
