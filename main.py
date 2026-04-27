@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
-# --- [여기서부터 모든 기능을 main.py 하나에 합칩니다] ---
-
+# --- [설정 관리] ---
 class ConfigManager:
     def __init__(self):
         self.path = 'config.json'
@@ -18,55 +17,99 @@ class ConfigManager:
         with open(self.path, 'w', encoding='utf-8') as f:
             json.dump(self.config, f, indent=4, ensure_ascii=False)
 
+# --- [뉴스 수집 엔진] ---
 class NewsEngine:
     def __init__(self, config):
         self.config = config
-        self.mapping = {"214": "MBC", "001": "연합뉴스", "003": "뉴시스", "421": "뉴스1"}
+        # 매체명 매핑 정보
+        self.mapping = {
+            "001": "연합뉴스", "003": "뉴시스", "421": "뉴스1",
+            "055": "SBS", "056": "KBS", "214": "MBC", "052": "YTN", "057": "MBN",
+            "437": "JTBC", "448": "TV조선", "449": "채널A", "422": "연합뉴스TV",
+            "023": "조선일보", "025": "중앙일보", "020": "동아일보", "469": "한국일보",
+            "028": "한겨레", "032": "경향신문", "005": "국민일보", "021": "문화일보"
+        }
+
     def fetch_naver(self, query):
         url = "https://openapi.naver.com/v1/search/news.json"
-        headers = {"X-Naver-Client-Id": self.config.get('naver_client_id'), "X-Naver-Client-Secret": self.config.get('naver_client_secret')}
-        params = {"query": query, "display": 50, "sort": "date"}
+        headers = {
+            "X-Naver-Client-Id": self.config.get('naver_client_id'),
+            "X-Naver-Client-Secret": self.config.get('naver_client_secret')
+        }
+        params = {"query": query, "display": 100, "sort": "date"}
         try:
             res = requests.get(url, headers=headers, params=params, timeout=5)
-            return [i for i in res.json().get('items', []) if "news.naver.com" in i['link']]
+            if res.status_code == 200:
+                return [i for i in res.json().get('items', []) if "news.naver.com" in i['link']]
+            return []
         except: return []
+
     def get_info_and_validate(self, item):
         url = item.get('link', '')
         try:
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=1.0)
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=0.8) # 타임아웃 살짝 늘림
             soup = BeautifulSoup(res.text, 'html.parser')
+            
+            # 1. 본문 길이 검증 (사진/짧은 기사 제외)
             content = soup.select_one('#newsct_article') or soup.select_one('#articleBodyContents')
-            if content and len(content.get_text(strip=True)) < 120: return None, False
-            meta = soup.select_one('meta[property="og:article:author"]')
-            media = meta['content'].split('|')[0].strip() if meta else "뉴스"
-            return media[:10], True
-        except:
-            oid = re.search(r"article/(\d+)/", url).group(1) if re.search(r"article/(\d+)/", url) else ""
-            return self.mapping.get(oid, "뉴스"), True
+            if content and len(content.get_text(strip=True)) < 120:
+                return None, False
+            
+            # 2. 매체명 추출
+            meta = soup.select_one('meta[property="og:article:author"]') or soup.select_one('meta[name="twitter:creator"]')
+            if meta:
+                media = re.sub(r'\[.*?\]|\(.*?\)', '', meta['content'].split('|')[0]).strip()
+                return media[:10], True
+        except: pass
+        
+        # 크롤링 실패 시 URL의 oid 번호로 매핑 시도
+        oid_match = re.search(r"article/(\d+)/", url)
+        oid = oid_match.group(1) if oid_match else ""
+        return self.mapping.get(oid, "뉴스"), True
 
+# --- [데이터 분류 및 저장] ---
 class DataHandler:
     def __init__(self):
         self.logs = {"scoops": [], "mbc": [], "agencies": [], "papers": [], "broadcasts": [], "logs": []}
         self.history = set()
+
     def classify(self, item, media, p_date):
         link = item.get('link', '')
         if link in self.history: return False
+        
         title = item.get('title', '').replace("<b>","").replace("</b>","").replace("&quot;", '"')
         oid_match = re.search(r"article/(\d+)/", link)
         oid = oid_match.group(1) if oid_match else ""
-        news_obj = {"media": media, "title": title, "url": link, "dt": p_date, "display_time": p_date.strftime("%H:%M"), "collected_at": datetime.now()}
-        if any(x in title for x in ["[단독]", "단독"]): self.logs["scoops"].insert(0, news_obj)
+
+        # 매체명에서 '언론사' 단어 제거 및 정제
+        clean_media = media.replace("언론사", "").strip()
+
+        news_obj = {
+            "media": clean_media[:8], 
+            "title": title, 
+            "url": link, 
+            "dt": p_date, 
+            "display_time": p_date.strftime("%H:%M"),
+            "collected_at": datetime.now()
+        }
+
+        # 1. 단독 분류
+        if any(x in title for x in ["[단독]", "단독"]):
+            self.logs["scoops"].insert(0, news_obj)
+
+        # 2. 매체별 섹션 분류
         target = "logs"
         if oid == "214": target = "mbc"
         elif oid in ["001", "003", "421"]: target = "agencies"
-        elif oid in ["023", "020", "025", "032", "028"]: target = "papers"
-        elif oid in ["056", "055", "052"]: target = "broadcasts"
+        elif oid in ["023", "020", "025", "032", "028", "469", "005", "021", "081", "022", "038"]: target = "papers"
+        elif oid in ["056", "055", "437", "448", "449", "057", "052", "422"]: target = "broadcasts"
+
         self.logs[target].insert(0, news_obj)
-        self.logs[target] = self.logs[target][:50]
+        self.logs[target] = self.logs[target][:100] # 섹션당 100개 유지
         self.history.add(link)
         return True
 
-# --- Flask 앱 실행부 ---
+# --- [서버 및 워커] ---
 app = Flask(__name__)
 KST = timezone(timedelta(hours=9))
 LAST_UPDATE = "--:--:--"
@@ -80,7 +123,8 @@ def send_telegram(title, link):
     if token and chat_id:
         try:
             text = f"🚨 <b>[단독]</b>\n{title}\n<a href='{link}'>보기</a>"
-            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5)
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
+                          data={"chat_id": chat_id, "text": text, "parse_mode": "HTML"}, timeout=5)
         except: pass
 
 def news_worker():
@@ -92,15 +136,19 @@ def news_worker():
             for kw in cfg.config.get('keywords', []):
                 items = engine.fetch_naver(kw)
                 for item in items:
-                    title = item.get('title', '').replace("<b>","").replace("</b>","")
                     media, is_valid = engine.get_info_and_validate(item)
                     if not is_valid: continue
+                    
                     try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
                     except: p_date = now
+                    
                     if db.classify(item, media, p_date):
-                        if any(x in title for x in ["[단독]", "단독"]): send_telegram(title, item['link'])
+                        if any(x in item.get('title', '') for x in ["[단독]", "단독"]):
+                            send_telegram(item.get('title', '').replace("<b>","").replace("</b>",""), item['link'])
             time.sleep(cfg.config.get('check_interval', 60))
-        except: time.sleep(10)
+        except Exception as e:
+            print(f"Worker Error: {e}")
+            time.sleep(10)
 
 @app.route('/')
 def index():
