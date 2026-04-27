@@ -4,24 +4,32 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
-# --- [설정 관리] ---
+# --- [1. 설정 관리 클래스] ---
 class ConfigManager:
     def __init__(self):
         self.path = 'config.json'
         self.config = self.load()
+
     def load(self):
         if os.path.exists(self.path):
-            with open(self.path, 'r', encoding='utf-8') as f: return json.load(f)
-        return {"keywords": ["단독"], "check_interval": 60}
+            try:
+                with open(self.path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except: pass
+        return {
+            "naver_client_id": "", "naver_client_secret": "",
+            "telegram_token": "", "telegram_chat_id": "",
+            "keywords": ["단독"], "exclude_keywords": [], "check_interval": 60
+        }
+
     def save(self):
         with open(self.path, 'w', encoding='utf-8') as f:
             json.dump(self.config, f, indent=4, ensure_ascii=False)
 
-# --- [뉴스 수집 엔진] ---
+# --- [2. 뉴스 수집 엔진 클래스] ---
 class NewsEngine:
     def __init__(self, config):
         self.config = config
-        # 매체명 매핑 정보
         self.mapping = {
             "001": "연합뉴스", "003": "뉴시스", "421": "뉴스1",
             "055": "SBS", "056": "KBS", "214": "MBC", "052": "YTN", "057": "MBN",
@@ -47,27 +55,20 @@ class NewsEngine:
     def get_info_and_validate(self, item):
         url = item.get('link', '')
         try:
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=0.8) # 타임아웃 살짝 늘림
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=1.0)
             soup = BeautifulSoup(res.text, 'html.parser')
-            
-            # 1. 본문 길이 검증 (사진/짧은 기사 제외)
             content = soup.select_one('#newsct_article') or soup.select_one('#articleBodyContents')
             if content and len(content.get_text(strip=True)) < 120:
                 return None, False
-            
-            # 2. 매체명 추출
             meta = soup.select_one('meta[property="og:article:author"]') or soup.select_one('meta[name="twitter:creator"]')
             if meta:
                 media = re.sub(r'\[.*?\]|\(.*?\)', '', meta['content'].split('|')[0]).strip()
                 return media[:10], True
         except: pass
-        
-        # 크롤링 실패 시 URL의 oid 번호로 매핑 시도
-        oid_match = re.search(r"article/(\d+)/", url)
-        oid = oid_match.group(1) if oid_match else ""
+        oid = re.search(r"article/(\d+)/", url).group(1) if re.search(r"article/(\d+)/", url) else ""
         return self.mapping.get(oid, "뉴스"), True
 
-# --- [데이터 분류 및 저장] ---
+# --- [3. 데이터 핸들러 클래스] ---
 class DataHandler:
     def __init__(self):
         self.logs = {"scoops": [], "mbc": [], "agencies": [], "papers": [], "broadcasts": [], "logs": []}
@@ -80,24 +81,16 @@ class DataHandler:
         title = item.get('title', '').replace("<b>","").replace("</b>","").replace("&quot;", '"')
         oid_match = re.search(r"article/(\d+)/", link)
         oid = oid_match.group(1) if oid_match else ""
-
-        # 매체명에서 '언론사' 단어 제거 및 정제
         clean_media = media.replace("언론사", "").strip()
 
         news_obj = {
-            "media": clean_media[:8], 
-            "title": title, 
-            "url": link, 
-            "dt": p_date, 
-            "display_time": p_date.strftime("%H:%M"),
-            "collected_at": datetime.now()
+            "media": clean_media[:8], "title": title, "url": link, 
+            "dt": p_date, "display_time": p_date.strftime("%H:%M")
         }
 
-        # 1. 단독 분류
         if any(x in title for x in ["[단독]", "단독"]):
             self.logs["scoops"].insert(0, news_obj)
 
-        # 2. 매체별 섹션 분류
         target = "logs"
         if oid == "214": target = "mbc"
         elif oid in ["001", "003", "421"]: target = "agencies"
@@ -105,11 +98,15 @@ class DataHandler:
         elif oid in ["056", "055", "437", "448", "449", "057", "052", "422"]: target = "broadcasts"
 
         self.logs[target].insert(0, news_obj)
-        self.logs[target] = self.logs[target][:100] # 섹션당 100개 유지
+        self.logs[target] = self.logs[target][:100]
         self.history.add(link)
         return True
 
-# --- [서버 및 워커] ---
+    def clear_all(self):
+        for k in self.logs: self.logs[k].clear()
+        self.history.clear()
+
+# --- [4. Flask 웹 서버 설정] ---
 app = Flask(__name__)
 KST = timezone(timedelta(hours=9))
 LAST_UPDATE = "--:--:--"
@@ -138,17 +135,13 @@ def news_worker():
                 for item in items:
                     media, is_valid = engine.get_info_and_validate(item)
                     if not is_valid: continue
-                    
                     try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
                     except: p_date = now
-                    
                     if db.classify(item, media, p_date):
-                        if any(x in item.get('title', '') for x in ["[단독]", "단독"]):
-                            send_telegram(item.get('title', '').replace("<b>","").replace("</b>",""), item['link'])
+                        if any(x in item.get('title','') for x in ["[단독]", "단독"]):
+                            send_telegram(item.get('title','').replace("<b>","").replace("</b>",""), item['link'])
             time.sleep(cfg.config.get('check_interval', 60))
-        except Exception as e:
-            print(f"Worker Error: {e}")
-            time.sleep(10)
+        except: time.sleep(10)
 
 @app.route('/')
 def index():
@@ -162,19 +155,16 @@ def add_kw():
     return redirect(url_for('index'))
 
 @app.route('/delete/<type>/<int:idx>')
-def delete_keyword(type, idx):
-    try:
-        # type이 'in'이면 포함 키워드, 'out'이면 제외 키워드 처리
-        target = 'keywords' if type == 'in' else 'exclude_keywords'
-        
-        if target in cfg.config and 0 <= idx < len(cfg.config[target]):
-            deleted_val = cfg.config[target].pop(idx) # 해당 순서의 키워드 삭제
-            cfg.save() # 변경사항을 config.json에 저장
-            print(f"✅ 삭제 완료: {deleted_val}")
-    except Exception as e:
-        print(f"❌ 삭제 중 오류 발생: {e}")
-        
-    return redirect(url_for('index')) # 삭제 후 다시 메인 화면으로 이동
+def delete_kw(type, idx):
+    target = 'keywords' if type == 'in' else 'exclude_keywords'
+    if target in cfg.config and 0 <= idx < len(cfg.config[target]):
+        cfg.config[target].pop(idx); cfg.save()
+    return redirect(url_for('index'))
+
+@app.route('/reset')
+def reset():
+    db.clear_all()
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
