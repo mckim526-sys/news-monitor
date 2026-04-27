@@ -149,8 +149,7 @@
 
                     <div class="list-area" style="max-height:70px;">
 
-                        {% for kw in c.keywords %}<div style="display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px solid #334155;"><span>{{kw}}</span<a href="{{ url_for('del_kw', type='in', idx=loop.index0) }}" 
-       style="text-decoration:none; color:red; margin-left:5px; font-weight:bold;">×</a></div>{% endfor %}
+                        {% for kw in c.keywords %}<div style="display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px solid #334155;"><span>{{kw}}</span><a href="/delete/in/{{loop.index0}}" style="color:#ef4444; text-decoration:none;">&times;</a></div>{% endfor %}
 
                     </div>
 
