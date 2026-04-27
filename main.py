@@ -161,6 +161,17 @@ def delete_kw(type, idx):
         cfg.config[target].pop(idx); cfg.save()
     return redirect(url_for('index'))
 
+# 사용자님의 버튼 링크(/reset_logs)와 일치시킨 함수
+@app.route('/reset_logs')
+def reset_logs():
+    try:
+        db.clear_all() # DataHandler 내의 모든 리스트와 히스토리 삭제
+        print("🧹 리셋 버튼 클릭: 모든 데이터 초기화 완료")
+    except Exception as e:
+        print(f"Reset Error: {e}")
+    
+    return redirect(url_for('index'))
+
 @app.route('/reset')
 def reset():
     db.clear_all()
