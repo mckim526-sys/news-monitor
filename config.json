@@ -1,0 +1,11 @@
+    default_config = {
+        "naver_client_id": "95Z1BqxALRzRJCytb4o2",
+        "naver_client_secret": "7MqUAk_zfx",
+        "telegram_token": "8042307148:AAF4n2Tw6oJR9Pohhc85m6r7g6t9wc277c",
+        "telegram_chat_id": "309932505",
+        "keywords": ["정치"],
+        "exclude_keywords": [],
+        "start_hour": 0,
+        "end_hour": 24,
+        "check_interval": 60
+    }
