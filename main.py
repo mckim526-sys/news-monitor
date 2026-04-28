@@ -90,6 +90,12 @@ def search():
     name = request.args.get('name', '')
     return jsonify({"results": db.search_sheet_data(name)})
 
+@app.route('/reset_logs')
+def web_reset_logs(): # 함수명이 중복되지 않도록 변경
+    db.clear_all()
+    print("🧹 모든 로그가 초기화되었습니다.")
+    return redirect(url_for('index'))
+
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
     # 3. app.run 시 정의된 PORT 변수 사용
