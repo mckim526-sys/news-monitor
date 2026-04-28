@@ -67,6 +67,15 @@ def update_settings():
     except: pass
     return redirect(url_for('index'))
 
+# 키워드 삭제 (404 에러 해결을 위해 경로를 명확히 정의)
+@app.route('/delete/<type>/<int:idx>')
+def delete_kw(type, idx):
+    target = 'keywords' if type == 'in' else 'exclude_keywords'
+    if target in cfg.config and 0 <= idx < len(cfg.config[target]):
+        cfg.config[target].pop(idx)
+        cfg.save()
+    return redirect(url_for('index'))
+
 @app.route('/add_kw/<type>', methods=['POST'])
 def add_kw(type):
     kw = request.form.get('new_kw', '').strip()
