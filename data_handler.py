@@ -2,10 +2,19 @@ import pandas as pd
 import requests
 import re
 from io import BytesIO
+from datetime import datetime
 
 class DataHandler:
     def __init__(self):
-        self.logs = {"recent":[], "mbc":[], "scoop":[], "agency":[], "paper":[], "broadcast":[]}
+        # [수정] main.py와 index.html의 변수명에 맞춰 키(Key) 이름을 통일했습니다.
+        self.logs = {
+            "scoops": [],    # scoop -> scoops
+            "mbc": [], 
+            "agencies": [],  # agency -> agencies
+            "papers": [],    # paper -> papers
+            "broadcasts": [], # broadcast -> broadcasts
+            "logs": []       # recent -> logs
+        }
         self.history = set()
         self.EXPORT_URL = "https://docs.google.com/spreadsheets/d/1Mi5gxnKG0Z6l-beesiVdrR2tey7qfIL6LqyNF1slHww/gviz/tq?tqx=out:csv&gid=1727539678"
 
@@ -20,8 +29,8 @@ class DataHandler:
                 results.append({
                     "name": str(row.get('성명', '미상')),
                     "party": str(row.get('정당', '미상')),
-                    "dist": str(row.get('선거구', '미상')), # 지역구 -> 선거구
-                    "tel": str(row.get('연락처', '미상'))   # 전화번호 -> 연락처
+                    "dist": str(row.get('선거구', '미상')),
+                    "tel": str(row.get('연락처', '미상'))
                 })
             return results
         except: return []
@@ -29,26 +38,54 @@ class DataHandler:
     def classify(self, item, media, p_date):
         link = item.get('link', '')
         if link in self.history: return False
+        
         title = item.get('title', '').replace("<b>","").replace("</b>","").replace("&quot;", '"')
-        oid = re.search(r"article/(\d+)/", link).group(1) if re.search(r"article/(\d+)/", link) else ""
-        news_obj = {"media": media, "title": title, "url": link, "dt": p_date}
+        
+        # URL에서 oid(언론사 코드) 추출
+        oid_match = re.search(r"article/(\d+)/", link)
+        oid = oid_match.group(1) if oid_match else ""
+        
+        # 매체명 정제
+        clean_media = media.replace("언론사", "").strip()
+        
+        news_obj = {
+            "media": clean_media[:8], 
+            "title": title, 
+            "url": link, 
+            "dt": p_date,
+            "display_time": p_date.strftime("%H:%M") # 화면 표시용 시간 추가
+        }
 
+        # 1. [단독] 뉴스 분류
         if any(x in title for x in ["[단독]", "단독"]):
-            self.logs["scoop"].insert(0, news_obj)
-            self.logs["scoop"] = self.logs["scoop"][:100]
+            self.logs["scoops"].insert(0, news_obj)
+            self.logs["scoops"] = self.logs["scoops"][:100]
 
-        target_key = "recent"
-        if oid == "214": target_key = "mbc"
-        elif oid in ["001", "003", "421"]: target_key = "agency"
-        elif oid in ["023", "020", "025", "032", "028", "469", "005", "021", "081", "022", "038"]: target_key = "paper"
-        elif oid in ["056", "055", "437", "448", "449", "057", "052", "422"]: target_key = "broadcast"
+        # 2. 매체별 상세 분류 (target_key를 index.html과 일치시킴)
+        target_key = "logs" # 기본 섹션: 기타/최신 로그
+        
+        if oid == "214": 
+            target_key = "mbc"
+        # 통신사 (연합, 뉴시스, 뉴스1 등)
+        elif oid in ["001", "003", "421", "051", "008"]: 
+            target_key = "agencies"
+        # 일간지 (조선, 중앙, 동아, 한겨레, 경향 등)
+        elif oid in ["023", "020", "025", "032", "028", "469", "005", "021", "081", "022", "038", "015", "011"]: 
+            target_key = "papers"
+        # 방송사 (KBS, SBS, YTN, JTBC 등)
+        elif oid in ["056", "055", "437", "448", "449", "057", "052", "422", "215", "420"]: 
+            target_key = "broadcasts"
 
+        # 데이터 삽입 및 최신순 정렬
         self.logs[target_key].insert(0, news_obj)
         self.logs[target_key].sort(key=lambda x: x['dt'], reverse=True)
         self.logs[target_key] = self.logs[target_key][:100]
+        
         self.history.add(link)
         return True
 
     def clear_all(self):
-        for k in self.logs: self.logs[k].clear()
+        """데이터 리셋 기능"""
+        for k in self.logs: 
+            self.logs[k].clear()
         self.history.clear()
