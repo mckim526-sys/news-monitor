@@ -1,79 +1,228 @@
 <!DOCTYPE html>
+
+
+
 <html lang="ko">
+
+
+
 <head>
+
+
+
     <meta charset="UTF-8">
+
+
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <title>MBC POLITICS NEWS COMMAND</title>
+
     <style>
+
         :root { --bg: #0f172a; --card: #1e293b; --primary: #38bdf8; --text: #f8fafc; --input: #334155; --agency: #10b981; --exclusive: #ef4444; --mbc: #fbbf24; }
+
         html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: 'Apple SD Gothic Neo', sans-serif; overflow: hidden; }
+
         .dashboard { display: flex; flex-direction: column; height: 100vh; padding: 10px; box-sizing: border-box; gap: 10px; }
+
         .top-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex-basis: 35%; flex-shrink: 0; overflow: hidden; }
+
         .bottom-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex-basis: 65%; flex-grow: 1; overflow: hidden; }
+
         .card { background: var(--card); border-radius: 12px; border: 1px solid #334155; padding: 15px; display: flex; flex-direction: column; overflow: hidden; }
+
         h3 { color: var(--primary); margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; border-left: 3px solid var(--primary); padding-left: 8px; user-select: none; display: flex; justify-content: space-between; align-items: center; }
-        
+
+        /* [스크롤 완벽 고정] */
+
         .collapsible-content { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; height: 100%; }
+
         .list-area { flex-grow: 1; overflow-y: auto !important; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.05); -webkit-overflow-scrolling: touch; }
+
         .list-area::-webkit-scrollbar { width: 6px; }
+
         .list-area::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
 
         .log-item { display: block; text-decoration: none; color: #cbd5e1; padding: 8px 0; border-bottom: 1px solid #334155; font-size: 13px; line-height: 1.4; }
-        
-        /* [추가] 읽은 기사 제목 색상 변경 로직 */
-        .log-item:visited { color: #64748b !important; }
-        .log-item:hover { color: var(--primary); text-decoration: underline; }
 
         .m-name { color: var(--primary); font-weight: bold; margin-right: 5px; }
+
         .m-mbc { color: var(--mbc); }
+
         .m-agency { color: var(--agency); }
+
         .m-exclusive { color: var(--exclusive); }
+
         .radio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 10px; }
+
         .q-link { background: #334155; color: #cbd5e1; text-decoration: none; font-size: 10px; padding: 6px; border-radius: 4px; text-align: center; border: 1px solid #475569; }
+.news-item a:visited {
+    color: #64748b !important; /* 읽은 후 색상: 슬레이트 그레이 */
+    text-decoration: none;
+}
 
+/* 마우스를 올렸을 때 강조 */
+.news-item a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+        
         @media (max-width: 1200px) {
-            html, body { height: auto; overflow: auto; }
-            .dashboard { height: auto; display: block; padding: 5px; }
-            .top-row, .bottom-row { display: block; }
-            .card { margin-bottom: 8px; height: auto !important; min-height: 48px; }
-            .collapsible-content { display: none; }
-            .card.expanded .collapsible-content { display: flex; flex-direction: column; }
-            h3 { cursor: pointer; }
-            h3::after { content: '[+]'; font-size: 11px; }
-            .card.expanded h3::after { content: '[−]'; }
-            .list-area { max-height: 400px; height: auto; flex-grow: 0; }
-        }
-    </style>
-</head>
-<body>
-    <div class="dashboard">
-        <div class="top-row">
-            <div class="card expanded" id="card-settings">
-                <h3 onclick="toggleCard(this)">⚙️ SETTINGS <span style="font-size:10px; color:#64748b; font-weight:normal;">Update: {{updated}}</span></h3>
-                <div class="collapsible-content">
-                    <form method="POST" action="/update_settings" style="display:flex; gap:5px; margin-bottom:10px;">
-                        <div style="flex:1.5; background:#0ea5e915; border:1px solid var(--primary); color:var(--primary); padding:7px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center; cursor:pointer;" onclick="location.reload()">REFRESH: <span id="timer">--</span>s</div>
-                        <input type="number" name="interval" style="width:40px; background:var(--input); border:1px solid #475569; color:white; border-radius:6px; font-size:11px; text-align:center;" value="{{c.check_interval}}">
-                        <button type="submit" style="background:var(--primary); color:#0f172a; border:none; padding:7px 10px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer;">SET</button>
-                    </form>
-                    <div class="radio-grid">
-                        <a href="https://programs.sbs.co.kr/radio/lchshow/boards/65364" target="_blank" class="q-link">SBS정치</a>
-                        <a href="https://www.imbc.com/broad/radio/fm/look/notice/index.html?bbs_id=focus01" target="_blank" class="q-link">MBC시선</a>
-                        <a href="https://program.kbs.co.kr/1radio/radio/jksisa/pc/board.html?bbs_loc=R2023-0190-03-173708,list,none,1,0" target="_blank" class="q-link">KBS전격</a>
-                        <a href="https://www.cbs.co.kr/board/list/cbs_P000246_info" target="_blank" class="q-link">CBS뉴스</a>
-                        <a href="https://radio.ytn.co.kr/program/?s_mcd=0214&s_hcd=02" target="_blank" class="q-link">YTN장성</a>
-                        <a href="https://www.youtube.com/@channelA-news/posts" target="_blank" class="q-link">채널A</a>
-                    </div>
-                    <div style="display:flex; gap:4px;">
-                        <input type="text" id="member-name" placeholder="의원/지역구 검색" style="background:var(--input); border:1px solid #475569; color:white; padding:8px; border-radius:6px; font-size:12px; flex:1;" onkeypress="if(event.key==='Enter') searchMember()">
-                        <button onclick="searchMember()" style="background:var(--primary); border:none; padding:0 8px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer;">GO</button>
-                        
-                        <a href="https://docs.google.com/spreadsheets/d/1Mi5gxnKG0Z6l-beesiVdrR2tey7qfIL6LqyNF1slHww/edit" target="_blank" style="background:var(--agency); color:white; text-decoration:none; padding:8px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center;">SHEET</a>
-                        
-                        <a href="/reset_logs" style="background:var(--exclusive); color:white; text-decoration:none; padding:8px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center;">RESET</a>
-                    </div>
-                    <div id="search-results" style="background:rgba(0,0,0,0.3); border-radius:6px; margin-top:5px; max-height:80px; overflow-y:auto; font-size:11px; text-align:left;"></div>
-                </div>
-            </div>
-            ```
 
+            html, body { height: auto; overflow: auto; }
+
+            .dashboard { height: auto; display: block; padding: 5px; }
+
+            .top-row, .bottom-row { display: block; }
+
+            .card { margin-bottom: 8px; height: auto !important; min-height: 48px; }
+
+            .collapsible-content { display: none; }
+
+            .card.expanded .collapsible-content { display: flex; flex-direction: column; }
+
+            h3 { cursor: pointer; }
+
+            h3::after { content: '[+]'; font-size: 11px; }
+
+            .card.expanded h3::after { content: '[−]'; }
+
+            /* 모바일 펼침 시 높이 및 내부 스크롤 강제 */
+
+            .list-area { max-height: 400px; height: auto; flex-grow: 0; }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="dashboard">
+
+        <div class="top-row">
+
+            <div class="card expanded" id="card-settings">
+
+                <h3 onclick="toggleCard(this)">⚙️ SETTINGS <span style="font-size:10px; color:#64748b; font-weight:normal;">Update: {{updated}}</span></h3>
+
+                <div class="collapsible-content">
+
+                    <form method="POST" action="/update_settings" style="display:flex; gap:5px; margin-bottom:10px;">
+
+                        <div style="flex:1.5; background:#0ea5e915; border:1px solid var(--primary); color:var(--primary); padding:7px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center; cursor:pointer;" onclick="location.reload()">REFRESH: <span id="timer">--</span>s</div>
+
+                        <input type="number" name="interval" style="width:40px; background:var(--input); border:1px solid #475569; color:white; border-radius:6px; font-size:11px; text-align:center;" value="{{c.check_interval}}">
+
+                        <button type="submit" style="background:var(--primary); color:#0f172a; border:none; padding:7px 10px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer;">SET</button>
+
+                    </form>
+
+                    <div class="radio-grid">
+
+                        <a href="https://programs.sbs.co.kr/radio/lchshow/boards/65364" target="_blank" class="q-link">SBS정치</a>
+
+                        <a href="https://www.imbc.com/broad/radio/fm/look/notice/index.html?bbs_id=focus01" target="_blank" class="q-link">MBC시선</a>
+
+                        <a href="https://program.kbs.co.kr/1radio/radio/jksisa/pc/board.html?bbs_loc=R2023-0190-03-173708,list,none,1,0" target="_blank" class="q-link">KBS전격</a>
+
+                        <a href="https://www.cbs.co.kr/board/list/cbs_P000246_info" target="_blank" class="q-link">CBS뉴스</a>
+
+                        <a href="https://radio.ytn.co.kr/program/?s_mcd=0214&s_hcd=02" target="_blank" class="q-link">YTN장성</a>
+
+                        <a href="https://www.youtube.com/@channelA-news/posts" target="_blank" class="q-link">채널A</a>
+
+                    </div>
+
+                    <div style="display:flex; gap:4px;">
+
+                        <input type="text" id="member-name" placeholder="의원/지역구 검색" style="background:var(--input); border:1px solid #475569; color:white; padding:8px; border-radius:6px; font-size:12px; flex:1;" onkeypress="if(event.key==='Enter') searchMember()">
+
+                        <button onclick="searchMember()" style="background:var(--primary); border:none; padding:0 8px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer;">GO</button>
+
+                        <a href="https://docs.google.com/spreadsheets/d/1Mi5gxnKG0Z6l-beesiVdrR2tey7qfIL6LqyNF1slHww/edit" target="_blank" style="background:var(--agency); color:white; text-decoration:none; padding:8px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center;">SHEET</a>
+                        <a href="/reset_logs" style="background:var(--exclusive); color:white; text-decoration:none; padding:8px; border-radius:6px; font-weight:bold; font-size:11px; text-align:center;">RESET</a>
+
+                    </div>
+
+                    <div id="search-results" style="background:rgba(0,0,0,0.3); border-radius:6px; margin-top:5px; max-height:80px; overflow-y:auto; font-size:11px; text-align:left;"></div>
+
+                </div>
+
+            </div>
+
+            <div class="card" id="card-keywords"><h3 onclick="toggleCard(this)">🔑 KEYWORDS</h3>
+
+                <div class="collapsible-content">
+
+                    <div style="font-size:10px; color:var(--agency); font-weight:bold;">INCLUSION:</div>
+
+                    <div class="list-area" style="max-height:70px;">
+
+                        {% for kw in c.keywords %}<div style="display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px solid #334155;"><span>{{kw}}</span><a href="/delete/in/{{loop.index0}}" style="color:#ef4444; text-decoration:none;">&times;</a></div>{% endfor %}
+
+                    </div>
+
+                    <form method="POST" action="/add_kw/in" style="display:flex; gap:3px; margin-top:5px; margin-bottom:10px;"><input type="text" name="new_kw" placeholder="+Add In" style="background:var(--input); border:1px solid #475569; color:white; padding:6px; font-size:11px; flex:1; border-radius:4px;"><button type="submit" style="background:var(--agency); border:none; border-radius:4px; color:white; padding:0 10px;">+</button></form>
+
+                    <div style="font-size:10px; color:var(--exclusive); font-weight:bold;">EXCLUSION:</div>
+
+                    <div class="list-area" style="max-height:70px;">
+
+                        {% for kw in c.exclude_keywords %}<div style="display:flex; justify-content:space-between; font-size:11px; padding:3px 0; border-bottom:1px solid #334155;"><span>{{kw}}</span><a href="/delete/ex/{{loop.index0}}" style="color:#ef4444; text-decoration:none;">&times;</a></div>{% endfor %}
+
+                    </div>
+
+                    <form method="POST" action="/add_kw/ex" style="display:flex; gap:3px; margin-top:5px;"><input type="text" name="new_kw" placeholder="-Add Ex" style="background:var(--input); border:1px solid #475569; color:white; padding:6px; font-size:11px; flex:1; border-radius:4px;"><button type="submit" style="background:var(--exclusive); border:none; border-radius:4px; color:white; padding:0 10px;">-</button></form>
+
+                </div>
+
+            </div>
+
+            <div class="card expanded" id="card-mbc"><h3 onclick="toggleCard(this)">📺 MBC</h3><div class="collapsible-content"><div class="list-area">{% for log in mbc %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name m-mbc">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+            <div class="card" id="card-scoops"><h3 onclick="toggleCard(this)">🚨 SCOOPS</h3><div class="collapsible-content"><div class="list-area">{% for log in scoops %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name m-exclusive">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+        </div>
+
+        <div class="bottom-row">
+
+            <div class="card"><h3 onclick="toggleCard(this)">🛰️ AGENCIES</h3><div class="collapsible-content"><div class="list-area">{% for log in agencies %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name m-agency">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+            <div class="card"><h3 onclick="toggleCard(this)">📰 PAPERS</h3><div class="collapsible-content"><div class="list-area">{% for log in papers %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+            <div class="card"><h3 onclick="toggleCard(this)">📺 BROADCASTS</h3><div class="collapsible-content"><div class="list-area">{% for log in broadcasts %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+            <div class="card"><h3 onclick="toggleCard(this)">📡 REAL-TIME</h3><div class="collapsible-content"><div class="list-area">{% for log in logs %}<a href="{{log.url}}" target="_blank" class="log-item"><span class="m-name">[{{log.media}}]</span>{{log.title}}</a>{% endfor %}</div></div></div>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        function toggleCard(h) { if (window.innerWidth <= 1200) h.parentElement.classList.toggle('expanded'); }
+        function searchMember() {
+            const n = document.getElementById('member-name').value.trim();
+            const r = document.getElementById('search-results');
+            if(!n) return; r.innerHTML = "Searching...";
+            fetch(`/search_member?name=${encodeURIComponent(n)}`).then(res => res.json()).then(d => {
+                if(d.results && d.results.length > 0) { r.innerHTML = d.results.map(i => `<div style="padding:5px; border-bottom:1px dotted #334155;"><b>[${i.party}] ${i.name}</b> (${i.dist})<br>📞 ${i.tel}</div>`).join(''); } else { r.innerHTML = "No results."; }
+
+            });
+        }
+
+        let t = 60; setInterval(() => { t--; if(document.getElementById("timer")) document.getElementById("timer").innerText = Math.max(0, t); if(t <= 0) location.reload(); }, 1000);
+
+    </script>
+
+
+
+</body>
+
+
+
+</html>
