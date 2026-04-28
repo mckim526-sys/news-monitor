@@ -3,7 +3,7 @@
         "naver_client_secret": "7MqUAk_zfx",
         "telegram_token": "8042307148:AAGBl2hcGF2FR4PXrYQFMVsxKof-OmuJgGw",
         "telegram_chat_id": "309932505",
-        "keywords": ["국민의힘","국힘"],
+        "keywords": ["\"국민의힘\"", "\"국힘\""],
         "exclude_keywords": [],
         "start_hour": 0,
         "end_hour": 24,
