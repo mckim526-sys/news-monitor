@@ -1,4 +1,4 @@
-import threading, time, sys, json, requests
+import threading, time, sys, json, requests, os
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -6,9 +6,13 @@ from config_manager import ConfigManager
 from news_engine import NewsEngine
 from data_handler import DataHandler
 
+# 1. 포트 설정 (Render 환경 변수에서 가져오거나 기본값 10000 사용)
+PORT = int(os.environ.get("PORT", 10000))
+
 app = Flask(__name__)
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5001
-cfg = ConfigManager(PORT)
+
+# 2. ConfigManager 생성 시 인자(PORT) 제거 (에러 원인 해결)
+cfg = ConfigManager() 
 engine = NewsEngine(cfg.config)
 db = DataHandler()
 KST = timezone(timedelta(hours=9))
@@ -79,4 +83,5 @@ def search():
 
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
+    # 3. app.run 시 정의된 PORT 변수 사용
     app.run(host='0.0.0.0', port=PORT)
