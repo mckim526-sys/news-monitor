@@ -30,28 +30,17 @@ def send_telegram(title, link, config):
 def news_worker():
     global LAST_UPDATE_TIME
     photo_kws = ["[포토]", "[사진]", "[그래픽]", "포토뉴스"]
-    
     while True:
         try:
             now = datetime.now(KST)
             LAST_UPDATE_TIME = now.strftime("%H:%M:%S")
-            
             for kw in cfg.config.get('keywords', []):
-                # 1. 일반 검색 (모든 제휴 매체 100개 확보)
-                # 여기서 조선, 중앙, 동아, 방송사 등 일반적인 기사를 수집합니다.
-                general_items = engine.fetch_naver(kw)
+                # 투 트랙 수집: 일반 검색 + MBC 보강 검색
+                general = engine.fetch_naver(kw)
+                mbc_only = engine.fetch_naver(f"{kw} MBC")
                 
-                # 2. MBC 보강 검색 (MBC 기사가 밀려났을 경우를 대비)
-                # 일반 검색 결과에서 MBC가 부족하더라도 여기서 확실히 보충됩니다.
-                mbc_only_items = engine.fetch_naver(f"{kw} MBC")
-                
-                # 두 결과를 합침 (DataHandler.classify의 history가 중복을 자동 제거함)
-                combined_items = general_items + mbc_only_items
-                
-                for item in combined_items:
+                for item in (general + mbc_only):
                     title = item.get('title', '').replace("<b>","").replace("</b>","")
-                    
-                    # 기본 필터링
                     if any(pk in title for pk in photo_kws): continue
                     if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
                     
@@ -61,13 +50,10 @@ def news_worker():
                     try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
                     except: p_date = now
                     
-                    # 분류 및 저장
                     db.classify(item, media, p_date)
             
             time.sleep(cfg.config.get('check_interval', 60))
-        except Exception as e:
-            print(f"Error in worker: {e}")
-            time.sleep(10)
+        except: time.sleep(10)
 @app.route('/')
 def index():
     return render_template('index.html', c=cfg.config, updated=LAST_UPDATE_TIME, **db.logs)
