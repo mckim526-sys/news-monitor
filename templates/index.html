@@ -62,6 +62,36 @@
     text-decoration: none;
 }
 
+/* 1. 기본 링크 스타일 (읽기 전) */
+.log-item {
+    display: block;
+    text-decoration: none;
+    color: #cbd5e1; /* 기본 밝은 회색 */
+    padding: 8px 0;
+    border-bottom: 1px solid #334155;
+    font-size: 13px;
+    line-height: 1.4;
+    transition: color 0.2s; /* 부드러운 색상 변화 */
+}
+
+/* 2. 클릭한 링크 스타일 (읽은 후) */
+.log-item:visited {
+    color: #64748b !important; /* 슬레이트 그레이: 훨씬 어둡고 연한 느낌 */
+}
+
+/* 3. 읽은 링크 내부의 태그([MBC], [연합] 등) 색상도 함께 연하게 처리 */
+.log-item:visited .m-name {
+    color: #475569 !important;
+    opacity: 0.7;
+}
+
+/* 4. 마우스 오버 시 효과 (사용자 경험 개선) */
+.log-item:hover {
+    background: rgba(56, 189, 248, 0.05); /* 살짝 파란 배경 */
+    color: var(--primary) !important;
+}
+
+        
 /* 마우스를 올렸을 때 강조 */
 .news-item a:hover {
     color: var(--accent);
