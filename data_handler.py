@@ -34,43 +34,47 @@ class DataHandler:
                 })
             return results
         except: return []
-
 def classify(self, item, media, p_date):
-        link = item.get('link', '')
-        if link in self.history: return False
-        
-        title = item.get('title', '').replace("<b>","").replace("</b>","").replace("&quot;", '"')
-        oid_match = re.search(r"article/(\d+)/", link)
-        oid = oid_match.group(1) if oid_match else ""
-        
-        news_obj = {
-            "media": media.replace("언론사", "").strip()[:8], 
-            "title": title, 
-            "url": link, 
-            "dt": p_date, # 정렬을 위한 datetime 객체
-            "display_time": p_date.strftime("%H:%M")
-        }
+    link = item.get('link', '')
+    if link in self.history: return False
+    
+    title = item.get('title', '').replace("<b>","").replace("</b>","").replace("&quot;", '"')
+    oid_match = re.search(r"article/(\d+)/", link)
+    oid = oid_match.group(1) if oid_match else ""
+    
+    # 저장 객체 생성 (dt는 정렬용 datetime 객체)
+    news_obj = {
+        "media": media.replace("언론사", "").strip()[:8], 
+        "title": title, 
+        "url": link, 
+        "dt": p_date, 
+        "display_time": p_date.strftime("%H:%M")
+    }
 
-        # 1. 단독 분류 (중복 허용 시 별도 처리)
-        if any(x in title for x in ["[단독]", "단독"]):
-            self.logs["scoops"].append(news_obj)
-            self.logs["scoops"].sort(key=lambda x: x['dt'], reverse=True)
-            self.logs["scoops"] = self.logs["scoops"][:100]
+    # 카테고리 결정
+    target_key = "logs"
+    if oid == "214": target_key = "mbc"
+    elif oid in ["001", "003", "421"]: target_key = "agencies"
+    elif oid in ["023", "020", "025", "032", "028", "469", "005", "021"]: target_key = "papers"
+    elif oid in ["056", "055", "437", "448", "449", "057", "052", "422"]: target_key = "broadcasts"
 
-        # 2. 매체별 분류
-        target_key = "logs"
-        if oid == "214": target_key = "mbc"
-        elif oid in ["001", "003", "421"]: target_key = "agencies"
-        elif oid in ["023", "020", "025", "032", "028", "469", "005", "021", "081", "022", "038", "015", "011"]: target_key = "papers"
-        elif oid in ["056", "055", "437", "448", "449", "057", "052", "422", "215", "420"]: target_key = "broadcasts"
+    # [핵심] 1. 데이터 추가
+    self.logs[target_key].append(news_obj)
+    
+    # [핵심] 2. 추가 후 'dt'(시간 객체) 기준으로 전체 리스트 재정렬 (최신순)
+    self.logs[target_key].sort(key=lambda x: x['dt'], reverse=True)
+    
+    # [핵심] 3. 정렬된 상태에서 상위 100개만 남기기
+    self.logs[target_key] = self.logs[target_key][:100]
 
-        # [수정 포인트] 리스트 끝에 추가 후 'dt' 기준 내림차순 정렬
-        self.logs[target_key].append(news_obj)
-        self.logs[target_key].sort(key=lambda x: x['dt'], reverse=True)
-        self.logs[target_key] = self.logs[target_key][:100]
+    # 단독 기사(scoops)도 동일하게 정렬 처리
+    if any(x in title for x in ["[단독]", "단독"]):
+        self.logs["scoops"].append(news_obj)
+        self.logs["scoops"].sort(key=lambda x: x['dt'], reverse=True)
+        self.logs["scoops"] = self.logs["scoops"][:100]
         
-        self.history.add(link)
-        return True
+    self.history.add(link)
+    return True
 
     def clear_all(self):
         for k in self.logs: self.logs[k].clear()
