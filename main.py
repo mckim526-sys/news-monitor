@@ -108,6 +108,6 @@ def web_reset_logs(): # 함수명이 중복되지 않도록 변경
     print("🧹 모든 로그가 초기화되었습니다.")
     return redirect(url_for('index'))
 
-iif __name__ == '__main__':
+if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
