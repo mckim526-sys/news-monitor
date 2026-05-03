@@ -34,22 +34,33 @@ def news_worker():
         try:
             now = datetime.now(KST)
             LAST_UPDATE_TIME = now.strftime("%H:%M:%S")
+            
             for kw in cfg.config.get('keywords', []):
-                items = engine.fetch_naver(kw)
-                for item in items:
-                    title = item.get('title', '').replace("<b>","").replace("</b>","")
-                    if any(pk in title for pk in photo_kws): continue
-                    if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
-                    
-                    media, is_valid = engine.get_info_and_validate(item)
-                    if not is_valid: continue
-                    
-                    try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
-                    except: p_date = now
-                    
-                    if db.classify(item, media, p_date):
-                        if any(x in title for x in ["[단독]", "단독"]):
-                            send_telegram(title, item['link'], cfg.config)
+                # 전략: 일반 검색 결과 + 해당 키워드의 MBC 기사만 별도 검색
+                search_queries = [kw, f"{kw} MBC"] 
+                
+                for query in search_queries:
+                    items = engine.fetch_naver(query)
+                    for item in items:
+                        # [핵심] fetch_naver 내부에서 news.naver.com 필터가 이미 작동 중
+                        title = item.get('title', '').replace("<b>","").replace("</b>","")
+                        
+                        # 제외 처리 (사진, 금지어)
+                        if any(pk in title for pk in photo_kws): continue
+                        if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
+                        
+                        media, is_valid = engine.get_info_and_validate(item)
+                        if not is_valid: continue
+                        
+                        try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
+                        except: p_date = now
+                        
+                        # db.classify 내부의 history(중복제거) 덕분에 
+                        # kw와 kw MBC에서 겹치는 기사는 한 번만 처리됨
+                        if db.classify(item, media, p_date):
+                            if any(x in title for x in ["[단독]", "단독"]):
+                                send_telegram(title, item['link'], cfg.config)
+            
             time.sleep(cfg.config.get('check_interval', 60))
         except: time.sleep(10)
 
