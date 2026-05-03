@@ -30,40 +30,44 @@ def send_telegram(title, link, config):
 def news_worker():
     global LAST_UPDATE_TIME
     photo_kws = ["[포토]", "[사진]", "[그래픽]", "포토뉴스"]
+    
     while True:
         try:
             now = datetime.now(KST)
             LAST_UPDATE_TIME = now.strftime("%H:%M:%S")
             
             for kw in cfg.config.get('keywords', []):
-                # 전략: 일반 검색 결과 + 해당 키워드의 MBC 기사만 별도 검색
-                search_queries = [kw, f"{kw} MBC"] 
+                # 1. 일반 검색 (모든 제휴 매체 100개 확보)
+                # 여기서 조선, 중앙, 동아, 방송사 등 일반적인 기사를 수집합니다.
+                general_items = engine.fetch_naver(kw)
                 
-                for query in search_queries:
-                    items = engine.fetch_naver(query)
-                    for item in items:
-                        # [핵심] fetch_naver 내부에서 news.naver.com 필터가 이미 작동 중
-                        title = item.get('title', '').replace("<b>","").replace("</b>","")
-                        
-                        # 제외 처리 (사진, 금지어)
-                        if any(pk in title for pk in photo_kws): continue
-                        if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
-                        
-                        media, is_valid = engine.get_info_and_validate(item)
-                        if not is_valid: continue
-                        
-                        try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
-                        except: p_date = now
-                        
-                        # db.classify 내부의 history(중복제거) 덕분에 
-                        # kw와 kw MBC에서 겹치는 기사는 한 번만 처리됨
-                        if db.classify(item, media, p_date):
-                            if any(x in title for x in ["[단독]", "단독"]):
-                                send_telegram(title, item['link'], cfg.config)
+                # 2. MBC 보강 검색 (MBC 기사가 밀려났을 경우를 대비)
+                # 일반 검색 결과에서 MBC가 부족하더라도 여기서 확실히 보충됩니다.
+                mbc_only_items = engine.fetch_naver(f"{kw} MBC")
+                
+                # 두 결과를 합침 (DataHandler.classify의 history가 중복을 자동 제거함)
+                combined_items = general_items + mbc_only_items
+                
+                for item in combined_items:
+                    title = item.get('title', '').replace("<b>","").replace("</b>","")
+                    
+                    # 기본 필터링
+                    if any(pk in title for pk in photo_kws): continue
+                    if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
+                    
+                    media, is_valid = engine.get_info_and_validate(item)
+                    if not is_valid: continue
+                    
+                    try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
+                    except: p_date = now
+                    
+                    # 분류 및 저장
+                    db.classify(item, media, p_date)
             
             time.sleep(cfg.config.get('check_interval', 60))
-        except: time.sleep(10)
-
+        except Exception as e:
+            print(f"Error in worker: {e}")
+            time.sleep(10)
 @app.route('/')
 def index():
     return render_template('index.html', c=cfg.config, updated=LAST_UPDATE_TIME, **db.logs)
