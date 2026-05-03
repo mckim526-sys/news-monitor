@@ -34,36 +34,24 @@ def news_worker():
         try:
             now = datetime.now(KST)
             LAST_UPDATE_TIME = now.strftime("%H:%M:%S")
-            
             for kw in cfg.config.get('keywords', []):
-                # 1. 데이터 수집
-                general = engine.fetch_naver(kw)
-                mbc_only = engine.fetch_naver(f"{kw} MBC")
-                
-                # 2. 통합 및 전처리
-                combined = general + mbc_only
-                
-                for item in combined:
+                items = engine.fetch_naver(kw)
+                for item in items:
                     title = item.get('title', '').replace("<b>","").replace("</b>","")
                     if any(pk in title for pk in photo_kws): continue
                     if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
-                    
-                    # 3. 시간 파싱 (실패 시에만 now 사용)
-                    try:
-                        # 네이버 pubDate는 정해진 규격이 있으므로 최대한 파싱 시도
-                        p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
-                    except:
-                        p_date = now # 파싱 실패 시 수집 시점 시간 부여
-                    
-                    # 4. 유효성 검사 및 저장 (여기서 정렬 로직이 작동함)
-                    media, is_valid = engine.get_info_and_validate(item)
-                    if is_valid:
-                        db.classify(item, media, p_date)
-            
-            time.sleep(cfg.config.get('check_interval', 60))
-        except:
-            time.sleep(10)
 
+                    media, is_valid = engine.get_info_and_validate(item)
+                    if not is_valid: continue
+
+                    try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
+                    except: p_date = now
+
+                    if db.classify(item, media, p_date):
+                        if any(x in title for x in ["[단독]", "단독"]):
+                            send_telegram(title, item['link'], cfg.config)
+            time.sleep(cfg.config.get('check_interval', 60))
+        except: time.sleep(10)
 
 @app.route('/')
 def index():
@@ -110,4 +98,5 @@ def web_reset_logs(): # 함수명이 중복되지 않도록 변경
 
 if __name__ == '__main__':
     threading.Thread(target=news_worker, daemon=True).start()
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+    # 3. app.run 시 정의된 PORT 변수 사용
+    app.run(host='0.0.0.0', port=PORT)
