@@ -34,26 +34,37 @@ def news_worker():
         try:
             now = datetime.now(KST)
             LAST_UPDATE_TIME = now.strftime("%H:%M:%S")
+            
             for kw in cfg.config.get('keywords', []):
-                # 투 트랙 수집: 일반 검색 + MBC 보강 검색
+                # 1. 데이터 수집
                 general = engine.fetch_naver(kw)
                 mbc_only = engine.fetch_naver(f"{kw} MBC")
                 
-                for item in (general + mbc_only):
+                # 2. 통합 및 전처리
+                combined = general + mbc_only
+                
+                for item in combined:
                     title = item.get('title', '').replace("<b>","").replace("</b>","")
                     if any(pk in title for pk in photo_kws): continue
                     if any(ex in title for ex in cfg.config.get('exclude_keywords', [])): continue
                     
+                    # 3. 시간 파싱 (실패 시에만 now 사용)
+                    try:
+                        # 네이버 pubDate는 정해진 규격이 있으므로 최대한 파싱 시도
+                        p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
+                    except:
+                        p_date = now # 파싱 실패 시 수집 시점 시간 부여
+                    
+                    # 4. 유효성 검사 및 저장 (여기서 정렬 로직이 작동함)
                     media, is_valid = engine.get_info_and_validate(item)
-                    if not is_valid: continue
-                    
-                    try: p_date = parsedate_to_datetime(item['pubDate']).astimezone(KST)
-                    except: p_date = now
-                    
-                    db.classify(item, media, p_date)
+                    if is_valid:
+                        db.classify(item, media, p_date)
             
             time.sleep(cfg.config.get('check_interval', 60))
-        except: time.sleep(10)
+        except:
+            time.sleep(10)
+
+
 @app.route('/')
 def index():
     return render_template('index.html', c=cfg.config, updated=LAST_UPDATE_TIME, **db.logs)
