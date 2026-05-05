@@ -60,7 +60,7 @@ class DataHandler:
             target_key = "mbc"
         elif oid in ["001", "003", "421"]:
             target_key = "agencies"
-        elif oid in ["023", "020", "025", "032", "028", "469", "005", "021", "081", "022", "038", "015", "011"]:
+        elif oid in ["023", "020", "025", "032", "028", "469", "021", "081", "022", "079", "005"]:
             target_key = "papers"
         elif oid in ["056", "055", "437", "448", "449", "057", "052", "422", "215", "420"]:
             target_key = "broadcasts"
