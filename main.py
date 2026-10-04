@@ -98,7 +98,7 @@ def news_worker():
                         else:
                             errors += 1
                             break
-                set_status(f"수집 완료 · 오류 {errors}건" if errors else "수집 완료", successful=not errors and bool(config["keywords"]))
+                set_status(f"수집 완료 · 오류 {errors}건" if errors else "수집 완료", successful= bool(config["keywords"]))
         except Exception as exc:
             set_status("수집 오류 · 서버 로그 확인")
             logging.error("수집 작업 오류: %s", type(exc).__name__)
