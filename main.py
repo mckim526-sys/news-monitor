@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
 from config_manager import ConfigManager
 from news_engine import NewsEngine
@@ -64,10 +65,15 @@ def news_worker():
                 set_status("수집 시간 외")
             else:
                 set_status("수집 중")
+                # Fetch recent headlines first, then verify article pages in a bounded
+                # pool. Slow or blocked Naver article pages must not stall every keyword.
                 checked = set()
+                candidates = []
+                successful_searches = 0
                 for kw in config["keywords"]:
                     try:
                         items = engine.fetch_naver(kw, config)
+                        successful_searches += 1
                     except Exception as exc:
                         errors += 1
                         logging.error("검색 실패: %s", str(exc))
@@ -81,16 +87,29 @@ def news_worker():
                         if is_photo(title) or any(ex and ex in title for ex in config["exclude_keywords"]):
                             continue
                         try:
-                            media, valid = engine.get_info_and_validate(item, config)
-                            if not valid:
-                                continue
                             p_date = parsedate_to_datetime(item["pubDate"])
                             if p_date.tzinfo is None:
                                 raise ValueError("기사 시간대 없음")
-                            db.classify(item, media, p_date.astimezone(KST))
-                        except Exception as exc:
+                            candidates.append((item, info[2], p_date.astimezone(KST)))
+                        except (KeyError, ValueError, TypeError, OverflowError):
                             errors += 1
-                            logging.warning("기사 확인 실패 %s: %s", info[2], type(exc).__name__)
+
+                if candidates:
+                    set_status(f"기사 확인 중 · {len(candidates)}건")
+                    with ThreadPoolExecutor(max_workers=6) as pool:
+                        futures = {
+                            pool.submit(engine.get_info_and_validate, item, config): (item, key, p_date)
+                            for item, key, p_date in candidates
+                        }
+                        for future in as_completed(futures):
+                            item, key, p_date = futures[future]
+                            try:
+                                media, valid = future.result()
+                                if valid:
+                                    db.classify(item, media, p_date)
+                            except Exception as exc:
+                                errors += 1
+                                logging.warning("기사 확인 실패 %s: %s", key, type(exc).__name__)
                 if config.get("telegram_token") and config.get("telegram_chat_id"):
                     for key, title, url in db.pending_alerts():
                         if send_telegram(title, url, config):
@@ -98,7 +117,10 @@ def news_worker():
                         else:
                             errors += 1
                             break
-                set_status(f"수집 완료 · 오류 {errors}건" if errors else "수집 완료", successful= bool(config["keywords"]))
+                if not successful_searches and config["keywords"]:
+                    set_status(f"수집 실패 · 오류 {errors}건")
+                else:
+                    set_status(f"수집 완료 · 오류 {errors}건" if errors else "수집 완료", successful=successful_searches > 0)
         except Exception as exc:
             set_status("수집 오류 · 서버 로그 확인")
             logging.error("수집 작업 오류: %s", type(exc).__name__)
