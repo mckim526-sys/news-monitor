@@ -21,17 +21,33 @@ class NewsEngine:
         info = article_info(item.get("link", ""))
         if not info:
             return None, False
-        response = self.session.get(info[3], headers={"User-Agent": "Mozilla/5.0"}, timeout=(3, 5))
-        response.raise_for_status()
+
+        # Article pages may block scraping even when Naver's news search
+        # API returns valid metadata. In that case do not discard the headline.
+        # Photo-labelled headlines are already excluded by the worker.
+        fallback_media = MEDIA.get(info[0], "뉴스")
+        try:
+            response = requests.get(
+                info[3],
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=(3, 5),
+            )
+            response.raise_for_status()
+        except requests.RequestException:
+            return fallback_media, True
+
         soup = BeautifulSoup(response.text, "html.parser")
         content = soup.select_one("#newsct_article") or soup.select_one("#articleBodyContents")
         if content is None:
-            raise ValueError("기사 본문을 찾지 못했습니다. 다음 주기에 재확인합니다.")
+            return fallback_media, True
         for node in content.select("script, style"):
             node.decompose()
-        # 기존 사진 필터 유지: 짧은 속보도 제외될 수 있으므로 설정으로 조절 가능.
+
+        # Keep the original short-photo filtering whenever article text
+        # is accessible. Titles with explicit photo tags are filtered first.
         if len(content.get_text(strip=True)) < config.get("photo_min_chars", 120):
             return None, False
+
         media = MEDIA.get(info[0])
         if not media:
             logo = soup.select_one(".media_end_head_top_logo img")
