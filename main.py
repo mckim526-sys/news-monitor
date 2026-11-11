@@ -138,6 +138,12 @@ def start_worker():
 def ensure_worker():
     start_worker()
 
+@app.route("/health")
+def health():
+    with state_lock:
+        return jsonify(ok=True, last_update=LAST_UPDATE_TIME, status=STATUS)
+
+
 @app.route("/")
 def index():
     public = cfg.snapshot()
